@@ -1,0 +1,238 @@
+- debug:
+    var: ec2_instance_ami_search_tags
+    verbosity: 2
+
+- debug:
+    var: ami_search_tags
+    verbosity: 2
+
+- name: create non-empty tags list
+  set_fact:
+    ami_tags: "{{ ami_tags|default({})|combine({item.key: item.value}) }}"
+  with_dict: "{{ ami_search_tags }}"
+  when: item.value
+
+- name: find latest {{role_type}} ami for {{env}}
+  ec2_ami_find:
+    ami_id: "{{ ami_image|default(omit) }}"
+    region: "{{region}}"
+    profile: "{{ profile|default(omit) }}"
+    owner: self
+    ami_tags: "{{ ami_tags }}"
+    sort: creationDate
+    sort_order: descending
+    sort_end: 1
+  register: ami_find
+
+- fail:
+    msg: "Couldn't find the AMI with tags {{ ami_tags }}. Aborting"
+  when: not ami_find
+
+- name: latest ami for {{role_type}} in {{env}}
+  set_fact:
+    ami: "{{ami_find.results[0] }}"
+
+- name: set current version fact from AMI
+  set_fact:
+    ami_version: "{{ ami.tags.Version }}"
+    ami_name: "{{ ami.name }}"
+    ami_id: "{{ ami.ami_id }}"
+
+- name: print ami_id
+  debug:
+    var: ami_id
+    verbosity: 2
+
+- name: find the security groups for {{role_type}} in {{env}}
+  ec2_group_facts:
+    region: "{{region}}"
+    profile: "{{ profile|default(omit) }}"
+    filters: "{{ ec2_asg_security_group_filters }}"
+  register: sg
+
+- fail:
+    msg: "Not found any security group meeting {{ ec2_asg_security_group_filters }}"
+  when: not sg.security_groups
+
+- name: set security group list fact
+  set_fact:
+    security_groups: "{{ sg | json_query('security_groups[].group_id') }}"
+
+- ec2_lc_find:
+    region: "{{ region }}"
+    profile: "{{ profile|default(omit) }}"
+    name_regex: "{{ lc_config_search }}"
+    sort_order: descending
+    limit: 1
+  register: lc_found
+
+- name: set fact with existing image id
+  set_fact:
+    current_ami_id: "{{lc_found.results[0].image_id }}"
+    current_lc_name: "{{ lc_found.results[0].name }}"
+  when: lc_found.results
+
+- debug:
+    msg: "Current => {{ current_ami_id }}, requested => {{ami.ami_id}}"
+    verbosity: 2
+  when: current_ami_id is defined and current_ami_id != ami.ami_id
+
+- name: Remove the existing ASG if in replace mode
+  ec2_asg:
+    region: "{{ region }}"
+    profile: "{{ profile|default(omit) }}"
+    name: "{{ asg.name }}"
+    state: absent
+    wait_timeout: 600
+  when: ec2_asg_lc_replace|bool
+
+- name: Remove the existing LC if in replace mode
+  ec2_lc:
+    region: "{{ region }}"
+    profile: "{{ profile|default(omit) }}"
+    name: "{{ lc_config.name }}"
+    state: absent
+  when: ec2_asg_lc_replace|bool
+
+- debug:
+    msg: "{{ item.key }}: {{ item.value }}"
+    verbosity: 2
+  with_dict:
+    instance_profile_name: "{{ ec2_instance_profile }}"
+    name: "{{ lc_config.name }}"
+    key_name: "{{ lc_config.key_name }}"
+    security_groups: "{{ security_groups }}"
+    assign_public_ip: "{{ lc_config.assign_public_ip }}"
+    instance_type: "{{ec2_instance_type}}"
+    volumes: "{{ lc_config.volumes }}"
+
+- name: Create the {{role_type}} Launch Configuration in {{env}}
+  ec2_lc:
+    region: "{{ region }}"
+    profile: "{{ profile|default(omit) }}"
+    name: "{{ lc_config.name }}"
+    image_id: "{{ ami.ami_id }}"
+    key_name: "{{ lc_config.key_name }}"
+    instance_profile_name: "{{ ec2_instance_profile }}"
+    instance_monitoring: "{{ ec2_instance_monitoring }}"
+    security_groups: "{{ security_groups }}"
+    instance_type: "{{ec2_instance_type}}"
+    user_data: "{{ ec2_instance_user_data | default(omit) }}"
+    assign_public_ip: "{{ lc_config.assign_public_ip }}"
+    state: present
+    volumes: "{{ lc_config.volumes }}"
+  register: lc
+  when: ami
+
+- name: Gather facts about my {{role_type}} subnets
+  ec2_vpc_subnet_facts:
+    region: "{{ region }}"
+    profile: "{{ profile|default(omit) }}"
+    filters: "{{ ec2_asg_subnet_filters }}"
+  register: subnets
+
+- debug:
+    var: subnets.subnets
+    verbosity: 2
+
+- debug:
+    var: asg.load_balancers
+    verbosity: 2
+
+- debug:
+    msg: >
+      "name: {{ asg.name }} "
+      "load_balancers: {{ asg.load_balancers|default(omit) }}"
+      "launch_config_name: {{ lc.result.name }}"
+      "vpc_zone_identifier: {{ subnets.subnets | map(attribute='id') | list }}"
+      "health_check_period: {{ asg.health_check_period }}"
+      "health_check_type: {{ asg.health_check_type }}"
+      "replace_all_instances: {{ asg.replace_all_instances }}"
+      "min_size: {{ asg.min_size }}"
+      "max_size: {{ asg.max_size }}"
+      "desired_capacity: {{ asg.desired_capacity }}"
+      "tags: {{ asg.tags }}"
+    verbosity: 2
+
+- name: find the target group
+  elb_target_group_facts:
+    region: "{{ region }}"
+    profile: "{{ profile|default(omit) }}"
+    names: "{{ target_target_groups }}"
+  register: target_group_facts
+  when: target_target_groups|default([])|length > 0
+
+- name: set target_group_arn_list
+  set_fact:
+    target_group_arn_list: "{{ target_group_facts | json_query('target_groups[].target_group_arn') }}"
+  when: target_target_groups|default([])|length > 0
+
+- name: Create the {{role_type}} AutoScaling Group in {{env}}
+  ec2_asg:
+    region: "{{ region }}"
+    profile: "{{ profile|default(omit) }}"
+    name: "{{ asg.name }}"
+    launch_config_name: "{{ lc.result.name }}"
+    vpc_zone_identifier: "{{ subnets.subnets | map(attribute='id') | list }}"
+    health_check_period: "{{ asg.health_check_period }}"
+    health_check_type: "{{ asg.health_check_type }}"
+    replace_all_instances: "{{ asg.replace_all_instances }}"
+    min_size: "{{ asg.min_size }}"
+    max_size: "{{ asg.max_size }}"
+    desired_capacity: "{{ asg.desired_capacity }}"
+    tags: "{{ asg.tags }}"
+    # classic ELB
+    load_balancers: "{{ asg.load_balancers | default(omit)}}"
+    # application LB
+    target_group_arns: "{{ target_group_arn_list|default(omit) }}"
+    wait_timeout: 600
+  register: asg_group
+
+- name: Create the {{role_type}} AutoScaling Group Policies in {{env}}
+  ec2_scaling_policy:
+    region: "{{ region }}"
+    profile: "{{ profile|default(omit) }}"
+    name: "{{ item.name }}"
+    adjustment_type: "{{ item.adjustment_type }}"
+    asg_name: "{{ item.asg_name }}"
+    policy_type: "{{ item.policy_type|default('SimpleScaling') }}"
+    scaling_adjustment: "{{ item.scaling_adjustment|default(omit) }}"
+    min_adjustment_step: "{{ item.min_adjustment_step|default(omit) }}"
+    step_adjustments: "{{ item.step_adjustments|default(omit) }}"
+    cooldown: "{{ item.cooldown|default(omit) }}"
+    metric_aggregation: "{{ item.metric_aggregation|default(omit) }}"
+    estimated_instance_warmup: "{{ item.estimated_instance_warmup|default(omit) }}"
+    state: present
+  with_items: "{{ asg_policies }}"
+  register: asg_policy
+
+- name: Create and attach alarms to the {{ role_type }} ASG Policy in {{ env }}
+  ec2_metric_alarm:
+    region: "{{ region }}"
+    profile: "{{ profile|default(omit) }}"
+    name: "{{ item.name }}"
+    metric: "{{ item.metric }}"
+    namespace: "{{ item.namespace }}"
+    statistic: "{{ item.statistic }}"
+    comparison: "{{ item.comparison }}"
+    threshold: "{{ item.threshold }}"
+    period: "{{ item.period }}"
+    evaluation_periods: "{{ item.evaluation_periods }}"
+    unit: "{{ item.unit }}"
+    description: "{{ item.description }}"
+    alarm_actions: "{{ asg_policy.results | selectattr('name', 'equalto', item.alarm_actions) | map(attribute='arn') | list}}"
+    dimensions:
+      AutoScalingGroupName: "{{ asg.name }}"
+    state: present
+  with_items: "{{ asg_alarms }}"
+  register: asg_policy_alarms
+
+- name: Update New Relic with this application deployment
+  newrelic_deployment:
+    token: "{{ vault_newrelic_api_key }}"
+    app_name: "{{ newrelic_app_name }}"
+    user: Ansible Deployment
+    environment: "{{ env }}"
+    revision: "{{ ami_version }}"
+  ignore_errors: yes
+  when: current_ami_id is defined and current_ami_id != ami.ami_id

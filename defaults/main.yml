@@ -1,0 +1,162 @@
+stage: create
+ec2_instance_monitoring: false
+ec2_asg_lc_replace: false
+
+# Base variables used by the role. Copy it to your inventory files for the
+# launch-<role_type> and change if you need to overrides values.
+
+# Tags and filters
+ec2_asg_standard_filters:
+  "tag:Environment": "{{ env }}"
+  "tag:Application": "{{ role_type }}"
+  "tag:Tier": application
+ec2_asg_security_group_filters: "{{ ec2_asg_standard_filters }}"
+ec2_asg_subnet_filters: "{{ ec2_asg_standard_filters }}"
+
+asg_additional_tags:
+  - Name: "{{ ec2_instance_name }}"
+    propagate_at_launch: true
+  - Environment: "{{ env }}"
+    propagate_at_launch: true
+  - Application: "{{ role_type }}"
+    propagate_at_launch: true
+  - Tier: application
+    propagate_at_launch: true
+  - Owner: "{{ owner }}"
+    propagate_at_launch: true
+  - Version: "{{ ami_version|default() }}"
+    propagate_at_launch: true
+  - AmiParentImage: "{{ ami_id|default() }}"
+    propagate_at_launch: true
+  - AmiParentImageName: "{{ ami_name|default() }}"
+    propagate_at_launch: true
+  - Branch: "{{ branch }}"
+    propagate_at_launch: true
+
+# ASG attributes and ASG itself
+asg_min_size: 1
+asg_max_size: 1
+asg_desired_capacity: 1
+asg_health_check_period: 60
+asg_load_balancers: []
+asg_estimated_instance_warmup: 0
+
+asg:
+  name: "{{ vpc_name }}-{{ role_type }}-{{ ami_version + '-' if ami_version is defined else '' }}asg"
+  health_check_period: "{{ asg_health_check_period }}"
+  health_check_type: EC2
+  replace_all_instances: yes
+  min_size: "{{ asg_min_size }}"
+  max_size: "{{ asg_max_size }}"
+  desired_capacity: "{{ asg_desired_capacity }}"
+  load_balancers: "{{ asg_load_balancers }}"
+  tags: "{{ asg_additional_tags }}"
+  estimated_instance_warmup: "{{ asg_estimated_instance_warmup }}"
+
+lc_config_volumes: "{{ default_volumes }}"
+lc_config_search: "{{ vpc_name }}-lc-application-{{ role_type }}-{{ env }}"
+
+lc_config:
+  name: "{{ vpc_name }}-lc-{{ ami_name }}"
+  key_name: "{{ ec2_key_pair }}"
+  volumes: "{{ lc_config_volumes }}"
+  assign_public_ip: "{{ ec2_instance_is_public|default(False) }}"
+
+# Alarm settings
+asg_alarm_cpu_low_threshold: 10
+asg_alarm_cpu_high_threshold: 70
+asg_alarm_cpu_very_high_threshold: 50
+asg_alarm_cpu_low_evaluations: 3
+asg_alarm_cpu_high_evaluations: 5
+asg_alarm_cpu_very_high_evaluations: 1
+asg_alarm_cpu_low_period: 60
+asg_alarm_cpu_high_period: 60
+asg_alarm_cpu_very_high_period: 60
+
+standard_asg_alarms:
+  CPUHigh:
+    name: "{{ vpc_name }}-{{ role_type }}-cpu-high"
+    description: "{{ role_type }} Alarm CPU High"
+    metric: "CPUUtilization"
+    namespace: AWS/EC2
+    statistic: Average
+    comparison: ">"
+    threshold: "{{ asg_alarm_cpu_high_threshold }}"
+    period: "{{ asg_alarm_cpu_high_period }}"
+    evaluation_periods: "{{ asg_alarm_cpu_high_evaluations }}"
+    unit: Percent
+    alarm_actions: "{{ vpc_name }}-{{ role_type }}-scale-up-policy"
+
+  CPULow:
+    name: "{{ vpc_name }}-{{ role_type }}-cpu-low"
+    description: "{{ role_type }} Alarm CPU Low"
+    metric: "CPUUtilization"
+    namespace: AWS/EC2
+    statistic: Average
+    comparison: "<"
+    threshold:  "{{ asg_alarm_cpu_low_threshold }}"
+    period: "{{ asg_alarm_cpu_low_period }}"
+    evaluation_periods: "{{ asg_alarm_cpu_low_evaluations }}"
+    unit: Percent
+    alarm_actions: "{{ vpc_name }}-{{ role_type }}-scale-down-policy"
+
+  CPUVeryHigh:
+    name: "{{ vpc_name }}-{{ role_type }}-cpu-very-high"
+    description: "{{ role_type }} Alarm CPU Very High"
+    metric: "CPUUtilization"
+    namespace: AWS/EC2
+    statistic: Average
+    comparison: ">"
+    threshold: "{{ asg_alarm_cpu_very_high_threshold }}"
+    period: "{{ asg_alarm_cpu_very_high_period }}"
+    evaluation_periods: "{{ asg_alarm_cpu_very_high_evaluations }}"
+    unit: Percent
+    alarm_actions: "{{ vpc_name }}-{{ role_type }}-scale-up-cpu-very-high-policy"
+
+# ASG policies
+standard_asg_policies:
+  scale_up:
+    name: "{{ vpc_name }}-{{ role_type }}-scale-up-policy"
+    adjustment_type: ChangeInCapacity
+    asg_name: "{{ asg.name }}"
+    scaling_adjustment: 1
+    min_adjustment_step: 1
+    cooldown: 300
+
+  scale_down:
+    name: "{{ vpc_name }}-{{ role_type }}-scale-down-policy"
+    adjustment_type: ChangeInCapacity
+    asg_name: "{{ asg.name }}"
+    scaling_adjustment: -1
+    min_adjustment_step: 1
+    cooldown: 600
+
+  scale_up_cpu_very_high_simple:
+    name: "{{ vpc_name }}-{{ role_type }}-scale-up-cpu-very-high-policy"
+    adjustment_type: PercentChangeInCapacity
+    asg_name: "{{ asg.name }}"
+    scaling_adjustment: 100
+    cooldown: 300
+
+  scale_up_cpu_very_high_step:
+    name: "{{ vpc_name }}-{{ role_type }}-scale-up-cpu-very-high-policy"
+    policy_type: StepScaling
+    adjustment_type: PercentChangeInCapacity
+    asg_name: "{{ asg.name }}"
+    step_adjustments:
+    - upper_bound: 25
+      scaling_adjustment: 75
+    - lower_bound: 25
+      scaling_adjustment: 100
+    min_adjustment_step: 1
+    estimated_instance_warmup: "{{ asg.estimated_instance_warmup }}"
+
+asg_policies:
+  - "{{ standard_asg_policies.scale_up }}"
+  - "{{ standard_asg_policies.scale_up_cpu_very_high_simple }}"
+  - "{{ standard_asg_policies.scale_down }}"
+
+asg_alarms:
+  - "{{ standard_asg_alarms.CPULow }}"
+  - "{{ standard_asg_alarms.CPUHigh }}"
+  - "{{ standard_asg_alarms.CPUVeryHigh }}"

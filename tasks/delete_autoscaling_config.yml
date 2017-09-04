@@ -1,0 +1,26 @@
+- name: Find the ASGs to remove
+  ec2_asg_facts:
+    region: "{{ region }}"
+    profile: "{{ profile|default(omit) }}"
+    tags:
+      Application: "{{ role_type }}"
+      Environment: "{{ env }}"
+  register: candidate_asgs
+
+- name: Remove the {{role_type}} AutoScaling Group in {{env}}
+  ec2_asg:
+    region: "{{ region }}"
+    profile: "{{ profile|default(omit) }}"
+    name: "{{ item.auto_scaling_group_name }}"
+    state: absent
+  with_items: "{{ candidate_asgs.results }}"
+  when: unused is not defined or not unused or not item.target_group_arns|default([])
+
+- name: Remove the {{role_type}} Launch Configuration in {{env}}
+  ec2_lc:
+    region: "{{ region }}"
+    profile: "{{ profile|default(omit) }}"
+    state: absent
+    name: "{{ item.launch_configuration_name }}"
+  with_items: "{{ candidate_asgs.results }}"
+  when: unused is not defined or not unused or not item.target_group_arns|default([])

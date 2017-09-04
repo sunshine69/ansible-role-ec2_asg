@@ -1,0 +1,2 @@
+---
+- include: "{{ stage }}_autoscaling_config.yml"
