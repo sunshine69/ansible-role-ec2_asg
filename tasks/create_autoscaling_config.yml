@@ -1,5 +1,5 @@
 - debug:
-    var: ec2_instance_ami_search_tags
+    var: ami_search_tags
     verbosity: 2
 
 - debug:
@@ -32,12 +32,12 @@
   ec2_ami_find:
     region: "{{region}}"
     profile: "{{ profile|default(omit) }}"
-    ami_tags: "{{ ec2_instance_ami_search_tags|default(omit) }}"
+    ami_tags: "{{ ami_search_tags|default(omit) }}"
     sort: creationDate
     sort_order: descending
     sort_end: 1
   register: ami_find
-  when: ( ami_image is not defined or not ami_image ) and ec2_instance_ami_search_tags is defined and ec2_instance_ami_search_tags
+  when: ( ami_image is not defined or not ami_image ) and ami_search_tags is defined and ami_search_tags
 
 - name: set image fact
   set_fact:
@@ -47,7 +47,7 @@
 - fail:
     msg: |
       Can not find the base image. Ensure your tags are correct or set ami_image directly
-      Your search tag is: {{ ec2_instance_ami_search_tags|default('') }}
+      Your search tag is: {{ ami_search_tags|default('') }}
       Your ami_image is: {{ ami_image|default('') }}
   when: not ami
 
