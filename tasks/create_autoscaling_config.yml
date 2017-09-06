@@ -44,18 +44,6 @@
     ami: "{{ ami_find.results[0] }}"
   when: ami_find.results is defined and ami_find.results
 
-- name: find latest {{role_type}} ami for {{env}}
-  ec2_ami_find:
-    ami_id: "{{ ami_image|default(omit) }}"
-    region: "{{region}}"
-    profile: "{{ profile|default(omit) }}"
-    owner: self
-    ami_tags: "{{ ami_tags }}"
-    sort: creationDate
-    sort_order: descending
-    sort_end: 1
-  register: ami_find
-
 - fail:
     msg: |
       Can not find the base image. Ensure your tags are correct or set ami_image directly
