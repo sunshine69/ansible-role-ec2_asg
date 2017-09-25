@@ -162,7 +162,7 @@
     msg: >
       "name: {{ asg.name }} "
       "load_balancers: {{ asg.load_balancers|default(omit) }}"
-      "launch_config_name: {{ lc.result.name }}"
+      "launch_config_name: {{ lc.name }}"
       "vpc_zone_identifier: {{ subnets.subnets | map(attribute='id') | list }}"
       "health_check_period: {{ asg.health_check_period }}"
       "health_check_type: {{ asg.health_check_type }}"
@@ -191,7 +191,7 @@
     region: "{{ region }}"
     profile: "{{ profile|default(omit) }}"
     name: "{{ asg.name }}"
-    launch_config_name: "{{ lc.result.name }}"
+    launch_config_name: "{{ lc.name }}"
     vpc_zone_identifier: "{{ subnets.subnets | map(attribute='id') | list }}"
     health_check_period: "{{ asg.health_check_period }}"
     health_check_type: "{{ asg.health_check_type }}"
