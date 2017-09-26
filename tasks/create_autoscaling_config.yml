@@ -160,11 +160,11 @@
 
 - debug:
     var: asg
-    verbosity: 3
+    verbosity: 2
 
 - debug:
     var: lc
-    verbosity: 3
+    verbosity: 2
 
 - debug:
     msg: >
