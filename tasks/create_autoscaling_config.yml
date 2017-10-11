@@ -1,9 +1,3 @@
-- name: create non-empty tags list
-  set_fact:
-    ami_tags: "{{ ami_tags|default({})|combine({item.key: item.value}) }}"
-  with_dict: "{{ ami_search_tags }}"
-  when: item.value
-
 - include_role:
     name: lookup_ec2_ami
 
