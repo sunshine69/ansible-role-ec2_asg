@@ -8,11 +8,15 @@
       Your ami_image is: {{ ami_image|default('') }}
   when: not ami
 
-- name: set current version fact from AMI
+- name: set AMI facts
   set_fact:
-    ami_version: "{{ ami.tags.Version }}"
     ami_name: "{{ ami.name }}"
     ami_id: "{{ ami.ami_id }}"
+
+- name: set ami_version fact if available
+  set_fact:
+    ami_version: "{{ ami.tags.Version }}"
+  when: "'Version' in ami.tags"
 
 - name: print ami_id
   debug:
