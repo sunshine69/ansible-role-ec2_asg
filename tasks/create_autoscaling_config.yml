@@ -120,6 +120,14 @@
     verbosity: 2
 
 - debug:
+    var: asg
+    verbosity: 2
+
+- debug:
+    var: lc
+    verbosity: 2
+
+- debug:
     msg: >
       "name: {{ asg.name }} "
       "load_balancers: {{ asg.load_balancers|default(omit) }}"
