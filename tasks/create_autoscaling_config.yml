@@ -23,20 +23,28 @@
     var: ami_id
     verbosity: 2
 
-- name: find the security groups for {{role_type}} in {{env}}
-  ec2_group_facts:
-    region: "{{region}}"
-    profile: "{{ profile|default(omit) }}"
-    filters: "{{ ec2_asg_security_group_filters }}"
-  register: sg
+- block:
+  - name: find the security groups for {{role_type}} in {{env}}
+    ec2_group_facts:
+      region: "{{region}}"
+      profile: "{{ profile|default(omit) }}"
+      filters: "{{ ec2_asg_security_group_filters }}"
+    register: sg
 
-- fail:
-    msg: "Not found any security group meeting {{ ec2_asg_security_group_filters }}"
-  when: not sg.security_groups
+  - fail:
+      msg: "Not found any security group meeting {{ ec2_asg_security_group_filters }}"
+    when: not sg.security_groups
 
-- name: set security group list fact
-  set_fact:
-    security_groups: "{{ sg | json_query('security_groups[].group_id') }}"
+  - name: set security group list fact
+    set_fact:
+      security_groups: "{{ sg | json_query('security_groups[].group_id') }}"
+  when: ec2_asg_security_group_filters|default()
+
+- block:
+  - name: set security group list
+    set_fact:
+      security_groups: "{{ ec2_asg_security_groups }}"
+  when: ec2_asg_security_groups|default()
 
 - ec2_lc_find:
     region: "{{ region }}"
@@ -63,7 +71,7 @@
     profile: "{{ profile|default(omit) }}"
     name: "{{ asg.name }}"
     state: absent
-    wait_timeout: 600
+    wait_timeout: "{{ ec2_asg_remove_timeout }}"
   when: ec2_asg_lc_replace|bool
 
 - name: Remove the existing LC if in replace mode

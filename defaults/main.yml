@@ -1,17 +1,16 @@
 stage: create
 ec2_instance_monitoring: false
 ec2_asg_lc_replace: false
+ec2_asg_remove_timeout: 600
 
 # Base variables used by the role. Copy it to your inventory files for the
 # launch-<role_type> and change if you need to overrides values.
 
 # Tags and filters
-ec2_asg_standard_filters:
+ec2_asg_subnet_filters:
   "tag:Environment": "{{ env }}"
   "tag:Application": "{{ role_type }}"
   "tag:Tier": application
-ec2_asg_security_group_filters: "{{ ec2_asg_standard_filters }}"
-ec2_asg_subnet_filters: "{{ ec2_asg_standard_filters }}"
 
 asg_additional_tags:
   - Name: "{{ ec2_instance_name }}"
