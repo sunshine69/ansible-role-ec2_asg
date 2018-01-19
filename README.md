@@ -9,8 +9,10 @@ Requirements
 Role Variables
 --------------
 
-* `ec2_asg_security_groups` - a list of security group names or IDs for the launch configuration
-* `ec2_asg_security_group_filters` - a list of filters to use to find one or more security groups
+* `ec2_asg_security_groups` - a list of security group names or IDs for the launch configuration.
+  Mutually exclusive with `ec2_asg_security_group_filters`
+* `ec2_asg_security_group_filters` - a list of filters to use to find one or more security groups.
+  Mutually exclusive with `ec2_asg_security_groups`
 * `ec2_asg_remove_timeout` - timeout length when removing an ASG. Defaults to 600
 
 Dependencies
