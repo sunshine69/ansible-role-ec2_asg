@@ -71,7 +71,7 @@
     profile: "{{ profile|default(omit) }}"
     name: "{{ asg.name }}"
     state: absent
-    wait_timeout: 600
+    wait_timeout: "{{ ec2_asg_remove_timeout }}"
   when: ec2_asg_lc_replace|bool
 
 - name: Remove the existing LC if in replace mode
