@@ -14,6 +14,7 @@
     name: "{{ item.auto_scaling_group_name }}"
     state: absent
     wait_timeout: "{{ ec2_asg_remove_timeout }}"
+    wait_for_instances: no
   with_items: "{{ candidate_asgs.results }}"
   when: unused is not defined or not unused or ( check_target_group is defined and check_target_group and not item.target_group_arns|default([]) ) or (exclude_asg_name is defined and exclude_asg_name and item.auto_scaling_group_name != exclude_asg_name )
 

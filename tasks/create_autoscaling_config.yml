@@ -72,6 +72,7 @@
     name: "{{ asg.name }}"
     state: absent
     wait_timeout: "{{ ec2_asg_remove_timeout }}"
+    wait_for_instances: no
   when: ec2_asg_lc_replace|bool
 
 - name: Remove the existing LC if in replace mode
