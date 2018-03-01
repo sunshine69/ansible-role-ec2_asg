@@ -182,6 +182,7 @@
     load_balancers: "{{ asg.load_balancers | default(omit)}}"
     # application LB
     target_group_arns: "{{ target_group_arn_list|default(omit) }}"
+    termination_policies: "{{ asg.termination_policies|default(['Default']) }}"
     wait_timeout: 600
   register: asg_group
 
