@@ -11,7 +11,7 @@
 - name: set AMI facts
   set_fact:
     ami_name: "{{ ami.name }}"
-    ami_id: "{{ ami.ami_id }}"
+    ami_id: "{{ ami.image_id }}"
 
 - name: set ami_version fact if available
   set_fact:
@@ -61,9 +61,9 @@
   when: lc_found.results
 
 - debug:
-    msg: "Current => {{ current_ami_id }}, requested => {{ami.ami_id}}"
+    msg: "Current => {{ current_ami_id }}, requested => {{ami.image_id}}"
     verbosity: 2
-  when: current_ami_id is defined and current_ami_id != ami.ami_id
+  when: current_ami_id is defined and current_ami_id != ami.image_id
 
 - name: Remove the existing ASG if in replace mode
   ec2_asg:
@@ -100,7 +100,7 @@
     region: "{{ region }}"
     profile: "{{ profile|default(omit) }}"
     name: "{{ lc_config.name }}"
-    image_id: "{{ ami.ami_id }}"
+    image_id: "{{ ami.image_id }}"
     key_name: "{{ lc_config.key_name }}"
     instance_profile_name: "{{ ec2_instance_profile }}"
     instance_monitoring: "{{ ec2_instance_monitoring }}"
@@ -233,4 +233,4 @@
     environment: "{{ env }}"
     revision: "{{ ami_version }}"
   ignore_errors: yes
-  when: current_ami_id is defined and current_ami_id != ami.ami_id
+  when: current_ami_id is defined and current_ami_id != ami.image_id
