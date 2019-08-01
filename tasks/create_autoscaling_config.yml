@@ -111,7 +111,7 @@
     state: present
     volumes: "{{ lc_config.volumes }}"
   register: lc
-  when: ami
+  when: ami is defined and ami.keys()|length > 0
 
 - name: Gather facts about my {{role_type}} subnets
   ec2_vpc_subnet_facts:
