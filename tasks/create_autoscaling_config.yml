@@ -25,7 +25,7 @@
 
 - block:
   - name: find the security groups for {{role_type}} in {{env}}
-    ec2_group_facts:
+    ec2_group_info:
       region: "{{region}}"
       profile: "{{ profile|default(omit) }}"
       filters: "{{ ec2_asg_security_group_filters }}"
@@ -114,7 +114,7 @@
   when: ami is defined and ami.keys()|length > 0
 
 - name: Gather facts about my {{role_type}} subnets
-  ec2_vpc_subnet_facts:
+  ec2_vpc_subnet_info:
     region: "{{ region }}"
     profile: "{{ profile|default(omit) }}"
     filters: "{{ ec2_asg_subnet_filters }}"
@@ -152,7 +152,7 @@
     verbosity: 2
 
 - name: find the target group
-  elb_target_group_facts:
+  elb_target_group_info:
     region: "{{ region }}"
     profile: "{{ profile|default(omit) }}"
     names: "{{ target_target_groups }}"
